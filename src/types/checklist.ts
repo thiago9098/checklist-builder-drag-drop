@@ -29,14 +29,19 @@ export interface Alternativa {
 }
 
 export interface GrupoPergunta {
-  id_checklist: number;
   id_grupo_pergunta: number;
+  nm_nome: string;
+  ds_imagem?: string;
+  nm_ordem: number;
+  perguntas: PerguntaComAlternativas[];
+}
+
+export interface PerguntaComAlternativas extends Pergunta {
+  alternativas: Alternativa[];
   nm_ordem: number;
 }
 
-export interface ChecklistItem {
-  id: string;
-  type: 'pergunta' | 'alternativa';
-  data: Pergunta | Alternativa;
-  order: number;
+export interface ChecklistCompleto {
+  checklist: Checklist;
+  grupo_perguntas: GrupoPergunta[];
 }

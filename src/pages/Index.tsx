@@ -4,17 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { DraggableCard } from '@/components/checklist/DraggableCard';
-import { DroppableZone } from '@/components/checklist/DroppableZone';
 import { PerguntaCard } from '@/components/checklist/PerguntaCard';
 import { AlternativaCard } from '@/components/checklist/AlternativaCard';
-import { mockPerguntas, mockAlternativas } from '@/data/mockData';
-import { ChecklistItem, Pergunta, Alternativa } from '@/types/checklist';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { GrupoCard } from '@/components/checklist/GrupoCard';
+import { mockPerguntas, mockAlternativas, mockChecklists } from '@/data/mockData';
+import { GrupoPergunta, Pergunta, Alternativa, ChecklistCompleto } from '@/types/checklist';
+import { Plus, Save, FolderPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [grupos, setGrupos] = useState<GrupoPergunta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [nextGrupoId, setNextGrupoId] = useState(1);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -24,54 +25,143 @@ const Index = () => {
     const { active, over } = event;
     setActiveId(null);
 
-    if (!over || over.id !== 'checklist-zone') return;
+    if (!over) return;
 
-    const [type, id] = (active.id as string).split('-');
-    
-    // Check if item already exists
-    const exists = checklistItems.some(item => item.id === active.id);
-    if (exists) {
-      toast.error('Este item já foi adicionado ao checklist');
-      return;
+    const [sourceType, sourceId] = (active.id as string).split('-');
+    const overData = over.data?.current;
+
+    // Drag pergunta para grupo
+    if (sourceType === 'pergunta' && overData?.type === 'grupo') {
+      const perguntaId = parseInt(sourceId);
+      const pergunta = mockPerguntas.find(p => p.id_pergunta === perguntaId);
+      
+      if (!pergunta) return;
+
+      const grupoId = overData.grupoId;
+      setGrupos(grupos.map(g => {
+        if (g.id_grupo_pergunta === grupoId) {
+          // Check if pergunta already exists in any grupo
+          const existsInGrupo = grupos.some(grupo => 
+            grupo.perguntas.some(p => p.id_pergunta === perguntaId)
+          );
+          
+          if (existsInGrupo) {
+            toast.error('Esta pergunta já foi adicionada');
+            return g;
+          }
+
+          return {
+            ...g,
+            perguntas: [...g.perguntas, { 
+              ...pergunta, 
+              alternativas: [], 
+              nm_ordem: g.perguntas.length + 1 
+            }]
+          };
+        }
+        return g;
+      }));
+      toast.success('Pergunta adicionada ao grupo');
     }
 
-    let newItem: ChecklistItem | null = null;
+    // Drag alternativa para pergunta
+    if (sourceType === 'alternativa' && overData?.type === 'pergunta') {
+      const alternativaId = parseInt(sourceId);
+      const alternativa = mockAlternativas.find(a => a.id_alternativa === alternativaId);
+      
+      if (!alternativa) return;
 
-    if (type === 'pergunta') {
-      const pergunta = mockPerguntas.find(p => p.id_pergunta === parseInt(id));
-      if (pergunta) {
-        newItem = {
-          id: active.id as string,
-          type: 'pergunta',
-          data: pergunta,
-          order: checklistItems.length
-        };
-      }
-    } else if (type === 'alternativa') {
-      const alternativa = mockAlternativas.find(a => a.id_alternativa === parseInt(id));
-      if (alternativa) {
-        newItem = {
-          id: active.id as string,
-          type: 'alternativa',
-          data: alternativa,
-          order: checklistItems.length
-        };
-      }
-    }
-
-    if (newItem) {
-      setChecklistItems([...checklistItems, newItem]);
-      toast.success('Item adicionado ao checklist');
+      const { grupoId, perguntaId } = overData;
+      
+      setGrupos(grupos.map(g => {
+        if (g.id_grupo_pergunta === grupoId) {
+          return {
+            ...g,
+            perguntas: g.perguntas.map(p => {
+              if (p.id_pergunta === perguntaId) {
+                // Check if alternativa already exists
+                if (p.alternativas.some(a => a.id_alternativa === alternativaId)) {
+                  toast.error('Esta alternativa já foi adicionada');
+                  return p;
+                }
+                
+                return {
+                  ...p,
+                  alternativas: [...p.alternativas, alternativa]
+                };
+              }
+              return p;
+            })
+          };
+        }
+        return g;
+      }));
+      toast.success('Alternativa adicionada à pergunta');
     }
   };
 
-  const removeItem = (id: string) => {
-    setChecklistItems(checklistItems.filter(item => item.id !== id));
-    toast.success('Item removido do checklist');
+  const addGrupo = () => {
+    const novoGrupo: GrupoPergunta = {
+      id_grupo_pergunta: nextGrupoId,
+      nm_nome: `Grupo ${nextGrupoId}`,
+      nm_ordem: grupos.length + 1,
+      perguntas: []
+    };
+    setGrupos([...grupos, novoGrupo]);
+    setNextGrupoId(nextGrupoId + 1);
+    toast.success('Grupo adicionado');
+  };
+
+  const removeGrupo = (id: number) => {
+    setGrupos(grupos.filter(g => g.id_grupo_pergunta !== id));
+    toast.success('Grupo removido');
+  };
+
+  const updateGrupoNome = (id: number, nome: string) => {
+    setGrupos(grupos.map(g => g.id_grupo_pergunta === id ? { ...g, nm_nome: nome } : g));
+  };
+
+  const removePergunta = (grupoId: number, perguntaId: number) => {
+    setGrupos(grupos.map(g => {
+      if (g.id_grupo_pergunta === grupoId) {
+        return {
+          ...g,
+          perguntas: g.perguntas.filter(p => p.id_pergunta !== perguntaId)
+        };
+      }
+      return g;
+    }));
+    toast.success('Pergunta removida');
+  };
+
+  const removeAlternativa = (grupoId: number, perguntaId: number, alternativaId: number) => {
+    setGrupos(grupos.map(g => {
+      if (g.id_grupo_pergunta === grupoId) {
+        return {
+          ...g,
+          perguntas: g.perguntas.map(p => {
+            if (p.id_pergunta === perguntaId) {
+              return {
+                ...p,
+                alternativas: p.alternativas.filter(a => a.id_alternativa !== alternativaId)
+              };
+            }
+            return p;
+          })
+        };
+      }
+      return g;
+    }));
+    toast.success('Alternativa removida');
   };
 
   const saveChecklist = () => {
-    console.log('Checklist salvo:', checklistItems);
+    const resultado: ChecklistCompleto = {
+      checklist: mockChecklists[0],
+      grupo_perguntas: grupos
+    };
+    
+    console.log('Checklist salvo:', JSON.stringify(resultado, null, 2));
     toast.success('Checklist salvo com sucesso!');
   };
 
@@ -159,55 +249,46 @@ const Index = () => {
             {/* Área principal do checklist */}
             <div className="lg:col-span-2">
               <Card className="p-6">
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold mb-2">Seu Checklist</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {checklistItems.length} {checklistItems.length === 1 ? 'item adicionado' : 'itens adicionados'}
-                  </p>
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold mb-2">Seu Checklist</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {grupos.length} {grupos.length === 1 ? 'grupo criado' : 'grupos criados'}
+                    </p>
+                  </div>
+                  <Button onClick={addGrupo} className="gap-2">
+                    <FolderPlus className="w-4 h-4" />
+                    Adicionar Grupo
+                  </Button>
                 </div>
                 
                 <Separator className="mb-6" />
 
-                <DroppableZone id="checklist-zone">
-                  {checklistItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                        <Plus className="w-8 h-8 text-primary" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2">Checklist vazio</h3>
-                      <p className="text-sm text-muted-foreground max-w-sm">
-                        Arraste perguntas e alternativas da barra lateral para começar a criar seu checklist
-                      </p>
+                {grupos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                      <FolderPlus className="w-8 h-8 text-primary" />
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {checklistItems.map((item, index) => (
-                        <Card key={item.id} className="p-4 bg-background border-2">
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                              {index + 1}
-                            </div>
-                            <div className="flex-1">
-                              {item.type === 'pergunta' ? (
-                                <PerguntaCard pergunta={item.data as Pergunta} />
-                              ) : (
-                                <AlternativaCard alternativa={item.data as Alternativa} />
-                              )}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeItem(item.id)}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </DroppableZone>
+                    <h3 className="text-lg font-semibold mb-2">Nenhum grupo criado</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm">
+                      Clique em "Adicionar Grupo" para começar a criar seu checklist
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {grupos.map((grupo, index) => (
+                      <GrupoCard
+                        key={grupo.id_grupo_pergunta}
+                        grupo={grupo}
+                        index={index}
+                        onRemove={removeGrupo}
+                        onUpdateNome={updateGrupoNome}
+                        onRemovePergunta={removePergunta}
+                        onRemoveAlternativa={removeAlternativa}
+                      />
+                    ))}
+                  </div>
+                )}
               </Card>
             </div>
           </div>

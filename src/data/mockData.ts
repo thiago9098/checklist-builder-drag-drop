@@ -89,15 +89,3 @@ export const mockAlternativas: Alternativa[] = [
   }
 ];
 
-export const mockGrupoPerguntas: GrupoPergunta[] = [
-  {
-    id_checklist: 0,
-    id_grupo_pergunta: 0,
-    nm_ordem: 1
-  },
-  {
-    id_checklist: 0,
-    id_grupo_pergunta: 1,
-    nm_ordem: 2
-  }
-];
